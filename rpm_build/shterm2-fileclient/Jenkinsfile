@@ -1,0 +1,51 @@
+map = ['']
+
+pipeline {
+    agent any
+    parameters{
+
+    }
+    stages {
+        stage('prebuild') {
+            steps {
+                echo 'prebuild rpm'
+
+            }
+        }
+        stage('build official rpm') {
+            steps {
+                echo 'build official rpm'
+            }
+        }
+        stage('get official old rpm') {
+            steps {
+                echo 'get official old rpm'
+            }
+        }
+        stage('get official new script') {
+            steps {
+                echo 'get official new script'
+            }
+        }
+        stage('get official old script') {
+            steps {
+                echo 'get official old script'
+            }
+        }
+        stage('get lib') {
+            steps {
+                echo 'get lib'
+            }
+        }
+        stage('build upgrade package') {
+            steps {
+                echo 'build upgrade package'
+            }
+        }
+        stage('deploy') {
+            steps {
+                echo 'deploy'
+            }
+        }
+    }
+}

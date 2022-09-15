@@ -9,7 +9,7 @@ pipeline {
             }
         }
         stage('build official rpm') {
-            failFast: false
+            failFast false
             parallel{
                 stage('build shterm2-fileclient'){
                     steps{

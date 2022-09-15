@@ -9,9 +9,7 @@ pipeline {
             }
         }
         stage('build official rpm') {
-            steps {
-                echo 'build official rpm'
-            }
+            echo 'build official rpm'
             failFast: false
             parallel{
                 stage('build shterm2-fileclient'){

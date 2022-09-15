@@ -6,12 +6,24 @@ pipeline {
         stage('prebuild') {
             steps {
                 echo 'prebuild rpm'
-
             }
         }
         stage('build official rpm') {
             steps {
                 echo 'build official rpm'
+            }
+            failFast: false
+            parallel{
+                stage('build shterm2-fileclient'){
+                    steps{
+                        echo 'build shterm2-fileclient rpm'
+                    }
+                }
+                stage('build 3proxy'){
+                    steps{
+                        echo 'build 3proxy rpm'
+                    }
+                }
             }
         }
         stage('get official old rpm') {

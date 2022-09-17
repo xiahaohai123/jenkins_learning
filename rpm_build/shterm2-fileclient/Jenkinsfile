@@ -17,6 +17,7 @@ pipeline {
                         script {
                             def authentication = '3af1598d-3a55-402f-b59f-c12a8c34cad3'
                             def buildProject = 'shterm2-fileclient'
+                            int timeToPolling = 10
                             def response = httpRequest authentication: authentication,
                                     url: 'http://repos.shterm.com/jenkins/view/HUAWEI/job/3.3.8-c-huaweiit/job/shterm2-fileclient-3.3.8-c-huaweiit/api/json?pretty=true'
                             if (response.status != 200) {
@@ -41,7 +42,7 @@ pipeline {
                                         url: "http://repos.shterm.com/jenkins/view/HUAWEI/job/3.3.8-c-huaweiit/job/shterm2-fileclient-3.3.8-c-huaweiit/${nextBuildNumber}/api/json?pretty=true"
                                 if (buildInfoResponse.status == 404) {
                                     echo "The created build is not building, wait for building."
-                                    sleep 5
+                                    sleep timeToPolling
                                     continue
                                 }
                                 if (buildInfoResponse.status != 200) {
@@ -50,7 +51,9 @@ pipeline {
                                 def jsonBuildInfoResponse = readJSON text: buildInfoResponse.content
                                 boolean building = jsonBuildInfoResponse.building
                                 def result = jsonBuildInfoResponse.result
-                                if (!building) {
+                                if (building) {
+                                    echo "still in building, wait ${timeToPolling} seconds"
+                                } else {
                                     if ('SUCCESS' != result) {
                                         error("failed to build ${buildProject}")
                                     } else {
@@ -58,7 +61,7 @@ pipeline {
                                         break
                                     }
                                 }
-                                sleep 10
+                                sleep timeToPolling
                             }
                         }
                     }

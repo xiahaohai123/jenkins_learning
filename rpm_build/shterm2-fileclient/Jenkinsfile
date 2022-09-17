@@ -37,6 +37,7 @@ pipeline {
 
                             while (true) {
                                 def buildInfoResponse = httpRequest authentication: authentication,
+                                        validResponseCodes: '200,404',
                                         url: "http://repos.shterm.com/jenkins/view/HUAWEI/job/3.3.8-c-huaweiit/job/shterm2-fileclient-3.3.8-c-huaweiit/${nextBuildNumber}/api/json?pretty=true"
                                 if (buildInfoResponse.status == 404) {
                                     echo "The created build is not building, wait for building."

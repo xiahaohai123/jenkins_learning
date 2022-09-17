@@ -15,7 +15,7 @@ pipeline {
                     steps {
                         echo 'build shterm2-fileclient rpm'
                         script {
-                            def authentication = 'e6c8d343-ee36-48f1-88fe-b838bc03511a'
+                            def authentication = '3af1598d-3a55-402f-b59f-c12a8c34cad3'
                             def buildProject = 'shterm2-fileclient'
                             def response = httpRequest authentication: authentication,
                                     url: 'http://repos.shterm.com/jenkins/view/HUAWEI/job/3.3.8-c-huaweiit/job/shterm2-fileclient-3.3.8-c-huaweiit/api/json?pretty=true'

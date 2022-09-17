@@ -9,15 +9,49 @@ pipeline {
             }
         }
         stage('build official rpm') {
-            failFast false
-            parallel{
-                stage('build shterm2-fileclient'){
-                    steps{
+            failFast true
+            parallel {
+                stage('build shterm2-fileclient') {
+                    steps {
                         echo 'build shterm2-fileclient rpm'
+                        script {
+                            def authentication = 'e6c8d343-ee36-48f1-88fe-b838bc03511a'
+                            def response = httpRequest authentication: authentication, url: 'http://repos.shterm.com/jenkins/view/HUAWEI/job/3.3.8-c-huaweiit/job/shterm2-fileclient-3.3.8-c-huaweiit/api/json?pretty=true'
+                            if (response.status != 200) {
+                                error("failed to get job information for shterm2-fileclient")
+                            }
+                            def jsonResponse = readJSON text: response.content
+                            int nextBuildNumber = jsonResponse.nextBuildNumber
+                            println("nextBuildNumber: " + nextBuildNumber)
+
+                            def newBuildResponse = httpRequest authentication: authentication, url: 'http://repos.shterm.com/jenkins/view/HUAWEI/job/3.3.8-c-huaweiit/job/shterm2-fileclient-3.3.8-c-huaweiit/build'
+                            if (newBuildResponse.status != 201) {
+                                error("failed to create build of shterm2-fileclient")
+                            }
+
+                            while (true) {
+                                def buildInfoResponse = httpRequest authentication: authentication, url: "http://repos.shterm.com/jenkins/view/HUAWEI/job/3.3.8-c-huaweiit/job/shterm2-fileclient-3.3.8-c-huaweiit/${nextBuildNumber}/api/json?pretty=true"
+                                if (buildInfoResponse.status != 200) {
+                                    error("failed to get build information for shterm2-fileclient")
+                                }
+                                def jsonBuildInfoResponse = readJSON text: buildInfoResponse.content
+                                boolean building = jsonBuildInfoResponse.building
+                                def result = jsonBuildInfoResponse.result
+                                if (!building) {
+                                    if ('SUCCESS' != result) {
+                                        error("failed to build shterm2-fileclient")
+                                    } else {
+                                        echo 'succeed to build shterm2-fileclient'
+                                        break
+                                    }
+                                }
+                                sleep 10
+                            }
+                        }
                     }
                 }
-                stage('build 3proxy'){
-                    steps{
+                stage('build 3proxy') {
+                    steps {
                         echo 'build 3proxy rpm'
                     }
                 }

@@ -20,12 +20,12 @@ pipeline {
                         echo 'build shterm2-fileclient rpm'
                         script {
                             int timeToPolling = 10
-                            def response = httpRequest authentication: $authenticationId,
+                            def response = httpRequest authentication: authenticationId,
                                     url: 'http://repos.shterm.com/jenkins/view/HUAWEI/job/3.3.8-c-huaweiit/job/shterm2-fileclient-3.3.8-c-huaweiit/api/json?pretty=true'
                             if (response.status != 200) {
-                                error("failed to get job information for $buildProject")
+                                error("failed to get job information for ${buildProject}")
                             }
-                            echo "succeed to get job information of $buildProject"
+                            echo "succeed to get job information of ${buildProject}"
                             def jsonResponse = readJSON text: response.content
                             int nextBuildNumber = jsonResponse.nextBuildNumber
                             println("nextBuildNumber: ${nextBuildNumber}")

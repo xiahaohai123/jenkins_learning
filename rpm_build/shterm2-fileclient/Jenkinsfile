@@ -8,7 +8,7 @@ pipeline {
                 echo 'prebuild rpm'
             }
         }
-        stage('build official rpm') {
+        stage('build and get official rpm') {
             failFast true
             parallel {
                 stage('build shterm2-fileclient') {
@@ -62,6 +62,17 @@ pipeline {
                                     }
                                 }
                                 sleep timeToPolling
+                            }
+                        }
+
+                        echo "downloading shterm2-fileclient rpm to workspace"
+                        sh "curl -s -R -O http://10.10.0.12/yum/shterm/x86_64/Packages/shterm2-fileclient-3.3.8-132.aca.noarch.rpm"
+                        script {
+                            def buildProject = 'shterm2-fileclient'
+                            if (fileExists("shterm2-fileclient-3.3.8-132.aca.noarch.rpm")) {
+                                echo "succeed to download ${buildProject}"
+                            } else {
+                                error "failed to download ${buildProject}"
                             }
                         }
                     }

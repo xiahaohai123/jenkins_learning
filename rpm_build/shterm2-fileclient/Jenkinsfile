@@ -41,9 +41,9 @@ pipeline {
 
                         echo "downloading shterm2-fileclient rpm to workspace"
 
-                        def rpmFilename = "${buildProject}-${version}-${release}.${buildArch}.rpm" + ""
-                        sh "curl -s -R -O http://${rpmDeployHost}/${rpmDeployPath}/${rpmFilename}"
                         script {
+                            def rpmFilename = "${buildProject}-${version}-${release}.${buildArch}.rpm" + ""
+                            sh "curl -s -R -O http://${rpmDeployHost}/${rpmDeployPath}/${rpmFilename}"
                             if (fileExists(rpmFilename)) {
                                 echo "succeed to download ${buildProject}"
                             } else {

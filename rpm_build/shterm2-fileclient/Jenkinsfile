@@ -30,7 +30,7 @@ pipeline {
                         echo 'build shterm2-fileclient rpm'
                         script {
                             int timeToPolling = 10
-                            GString jobUrl = "http://${jenkinsHost}/view/HUAWEI/job/3.3.8-c-huaweiit/job/shterm2-fileclient-3.3.8-c-huaweiit"
+                            def jobUrl = "http://${jenkinsHost}/view/HUAWEI/job/3.3.8-c-huaweiit/job/shterm2-fileclient-3.3.8-c-huaweiit"
                             int nextBuildNumber = getNextBuilderNumber(buildProject, rpmJenkinsAuthenticationId, jobUrl)
                             echo("the nextBuildNumber of ${buildProject} : ${nextBuildNumber}")
 
@@ -41,7 +41,7 @@ pipeline {
 
                         echo "downloading shterm2-fileclient rpm to workspace"
 
-                        GString rpmFilename = "${buildProject}-${version}-${release}.${buildArch}.rpm"
+                        def rpmFilename = "${buildProject}-${version}-${release}.${buildArch}.rpm"
                         sh "curl -s -R -O http://${rpmDeployHost}/${rpmDeployPath}/${rpmFilename}"
                         script {
                             if (fileExists(rpmFilename)) {

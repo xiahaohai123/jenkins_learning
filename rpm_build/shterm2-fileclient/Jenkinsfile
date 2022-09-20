@@ -2,7 +2,7 @@ map = ['']
 
 pipeline {
     agent any
-    environment{
+    environment {
         rpmJenkinsAuthenticationId = '3af1598d-3a55-402f-b59f-c12a8c34cad3'
     }
     stages {
@@ -22,7 +22,8 @@ pipeline {
                         echo 'build shterm2-fileclient rpm'
                         script {
                             int timeToPolling = 10
-                            int nextBuildNumber = getNextBuilderNumber()
+                            String jobInfoUrl = "http://repos.shterm.com/jenkins/view/HUAWEI/job/3.3.8-c-huaweiit/job/shterm2-fileclient-3.3.8-c-huaweiit/api/json?pretty=true"
+                            int nextBuildNumber = getNextBuilderNumber(buildProject, rpmJenkinsAuthenticationId, jobInfoUrl)
                             println("nextBuildNumber: ${nextBuildNumber}")
 
                             def newBuildResponse = httpRequest authentication: rpmJenkinsAuthenticationId,
@@ -113,14 +114,13 @@ pipeline {
     }
 }
 
-private int getNextBuilderNumber() {
-    def response = httpRequest authentication: rpmJenkinsAuthenticationId,
-            url: 'http://repos.shterm.com/jenkins/view/HUAWEI/job/3.3.8-c-huaweiit/job/shterm2-fileclient-3.3.8-c-huaweiit/api/json?pretty=true'
+int getNextBuilderNumber(buildProject, authentication, url) {
+    def response = httpRequest authentication: authentication, url: url
     if (response.status != 200) {
         error("failed to get job information for ${buildProject}")
     }
     echo "succeed to get job information of ${buildProject}"
     def jsonResponse = readJSON text: response.content
     int nextBuildNumber = jsonResponse.nextBuildNumber
-    nextBuildNumber
+    return nextBuildNumber
 }

@@ -22,45 +22,13 @@ pipeline {
                         echo 'build shterm2-fileclient rpm'
                         script {
                             int timeToPolling = 10
-                            String jobInfoUrl = "http://repos.shterm.com/jenkins/view/HUAWEI/job/3.3.8-c-huaweiit/job/shterm2-fileclient-3.3.8-c-huaweiit/api/json?pretty=true"
-                            int nextBuildNumber = getNextBuilderNumber(buildProject, rpmJenkinsAuthenticationId, jobInfoUrl)
-                            println("nextBuildNumber: ${nextBuildNumber}")
+                            String jobUrl = "http://repos.shterm.com/jenkins/view/HUAWEI/job/3.3.8-c-huaweiit/job/shterm2-fileclient-3.3.8-c-huaweiit"
+                            int nextBuildNumber = getNextBuilderNumber(buildProject, rpmJenkinsAuthenticationId, jobUrl)
+                            echo("the nextBuildNumber of ${buildProject} : ${nextBuildNumber}")
 
-                            def newBuildResponse = httpRequest authentication: rpmJenkinsAuthenticationId,
-                                    url: 'http://repos.shterm.com/jenkins/view/HUAWEI/job/3.3.8-c-huaweiit/job/shterm2-fileclient-3.3.8-c-huaweiit/build',
-                                    httpMode: 'POST'
-                            if (newBuildResponse.status != 201) {
-                                error("failed to create build of ${buildProject}")
-                            }
-                            echo "succeed to create build of ${buildProject}"
+                            createBuild(buildProject, rpmJenkinsAuthenticationId, jobUrl)
 
-                            while (true) {
-                                def buildInfoResponse = httpRequest authentication: rpmJenkinsAuthenticationId,
-                                        validResponseCodes: '200,404',
-                                        url: "http://repos.shterm.com/jenkins/view/HUAWEI/job/3.3.8-c-huaweiit/job/shterm2-fileclient-3.3.8-c-huaweiit/${nextBuildNumber}/api/json?pretty=true"
-                                if (buildInfoResponse.status == 404) {
-                                    echo "The created build is not building, wait for building."
-                                    sleep timeToPolling
-                                    continue
-                                }
-                                if (buildInfoResponse.status != 200) {
-                                    error("failed to get build information for ${buildProject}")
-                                }
-                                def jsonBuildInfoResponse = readJSON text: buildInfoResponse.content
-                                boolean building = jsonBuildInfoResponse.building
-                                def result = jsonBuildInfoResponse.result
-                                if (building) {
-                                    echo "still in building, wait ${timeToPolling} seconds"
-                                } else {
-                                    if ('SUCCESS' != result) {
-                                        error("failed to build ${buildProject}")
-                                    } else {
-                                        echo "succeed to build ${buildProject}"
-                                        break
-                                    }
-                                }
-                                sleep timeToPolling
-                            }
+                            pollBuildStatus(nextBuildNumber, timeToPolling, buildProject, rpmJenkinsAuthenticationId, jobUrl)
                         }
 
                         echo "downloading shterm2-fileclient rpm to workspace"
@@ -114,8 +82,45 @@ pipeline {
     }
 }
 
-int getNextBuilderNumber(buildProject, authentication, url) {
-    def response = httpRequest authentication: authentication, url: url
+private void pollBuildStatus(int buildNumber, int timeToPolling, buildProject, authentication, jobUrl) {
+    while (true) {
+        def buildInfoResponse = httpRequest authentication: authentication, validResponseCodes: '200,404',
+                url: "${jobUrl}/${buildNumber}/api/json?pretty=true"
+        if (buildInfoResponse.status == 404) {
+            echo "The created build is not building, wait for building."
+            sleep timeToPolling
+            continue
+        }
+        if (buildInfoResponse.status != 200) {
+            error("failed to get build information for ${buildProject}")
+        }
+        def jsonBuildInfoResponse = readJSON text: buildInfoResponse.content
+        boolean building = jsonBuildInfoResponse.building
+        def result = jsonBuildInfoResponse.result
+        if (building) {
+            echo "still in building, wait ${timeToPolling} seconds"
+        } else {
+            if ('SUCCESS' != result) {
+                error("failed to build ${buildProject}")
+            } else {
+                echo "succeed to build ${buildProject}"
+                break
+            }
+        }
+        sleep timeToPolling
+    }
+}
+
+private void createBuild(buildProject, authentication, jobUrl) {
+    def newBuildResponse = httpRequest authentication: authentication, url: "${jobUrl}/build", httpMode: 'POST'
+    if (newBuildResponse.status != 201) {
+        error("failed to create build of ${buildProject}")
+    }
+    echo "succeed to create build of ${buildProject}"
+}
+
+private int getNextBuilderNumber(buildProject, authentication, jobUrl) {
+    def response = httpRequest authentication: authentication, url: "${jobUrl}/api/json?pretty=true"
     if (response.status != 200) {
         error("failed to get job information for ${buildProject}")
     }

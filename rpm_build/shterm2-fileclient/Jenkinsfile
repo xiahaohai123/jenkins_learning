@@ -12,17 +12,25 @@ pipeline {
             }
         }
         stage('build and get official rpm') {
+            environment {
+                jenkinsHost = "repos.shterm.com/jenkins"
+                rpmDeployHost = "10.10.0.12"
+                rpmDeployPath = "yum/shterm/x86_64/Packages"
+            }
             failFast true
             parallel {
                 stage('build shterm2-fileclient') {
                     environment {
                         buildProject = 'shterm2-fileclient'
+                        version = "3.3.8"
+                        release = "133.aca"
+                        buildArch = "noarch"
                     }
                     steps {
                         echo 'build shterm2-fileclient rpm'
                         script {
                             int timeToPolling = 10
-                            String jobUrl = "http://repos.shterm.com/jenkins/view/HUAWEI/job/3.3.8-c-huaweiit/job/shterm2-fileclient-3.3.8-c-huaweiit"
+                            GString jobUrl = "http://${jenkinsHost}/view/HUAWEI/job/3.3.8-c-huaweiit/job/shterm2-fileclient-3.3.8-c-huaweiit"
                             int nextBuildNumber = getNextBuilderNumber(buildProject, rpmJenkinsAuthenticationId, jobUrl)
                             echo("the nextBuildNumber of ${buildProject} : ${nextBuildNumber}")
 
@@ -32,9 +40,11 @@ pipeline {
                         }
 
                         echo "downloading shterm2-fileclient rpm to workspace"
-                        sh "curl -s -R -O http://10.10.0.12/yum/shterm/x86_64/Packages/shterm2-fileclient-3.3.8-132.aca.noarch.rpm"
+
+                        GString rpmFilename = "${buildProject}-${version}-${release}.${buildArch}.rpm"
+                        sh "curl -s -R -O http://${rpmDeployHost}/${rpmDeployPath}/${rpmFilename}"
                         script {
-                            if (fileExists("shterm2-fileclient-3.3.8-132.aca.noarch.rpm")) {
+                            if (fileExists(rpmFilename)) {
                                 echo "succeed to download ${buildProject}"
                             } else {
                                 error "failed to download ${buildProject}"

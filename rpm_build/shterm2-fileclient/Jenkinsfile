@@ -19,18 +19,19 @@ pipeline {
             }
             failFast true
             parallel {
-                stage('build shterm2-fileclient') {
+                stage('shterm2-fileclient') {
                     environment {
                         buildProject = 'shterm2-fileclient'
                         version = "3.3.8"
                         release = "133.aca"
                         buildArch = "noarch"
+                        jobName = "shterm2-fileclient-3.3.8-c-huaweiit"
                     }
                     steps {
                         echo 'build shterm2-fileclient rpm'
                         script {
                             int timeToPolling = 10
-                            def jobUrl = "http://${jenkinsHost}/view/HUAWEI/job/3.3.8-c-huaweiit/job/shterm2-fileclient-3.3.8-c-huaweiit" + ""
+                            def jobUrl = "http://${jenkinsHost}/view/HUAWEI/job/3.3.8-c-huaweiit/job/${jobName}" + ""
                             int nextBuildNumber = getNextBuilderNumber(buildProject, rpmJenkinsAuthenticationId, jobUrl)
                             echo("the nextBuildNumber of ${buildProject} : ${nextBuildNumber}")
 
@@ -39,7 +40,7 @@ pipeline {
                             pollBuildStatus(nextBuildNumber, timeToPolling, buildProject, rpmJenkinsAuthenticationId, jobUrl)
                         }
 
-                        echo "downloading shterm2-fileclient rpm to workspace"
+                        echo "downloading ${buildProject} rpm to workspace"
 
                         script {
                             def rpmFilename = "${buildProject}-${version}-${release}.${buildArch}.rpm" + ""
@@ -52,9 +53,39 @@ pipeline {
                         }
                     }
                 }
-                stage('build 3proxy') {
+                stage('3proxy') {
+                    environment {
+                        buildProject = '3proxy'
+                        version = "0.9.3"
+                        release = "133.aca"
+                        buildArch = "x86_64"
+                        jobName = "3proxy-3.3.8-c-huaweiit"
+                    }
                     steps {
                         echo 'build 3proxy rpm'
+
+                        script {
+                            int timeToPolling = 10
+                            def jobUrl = "http://${jenkinsHost}/view/HUAWEI/job/3.3.8-c-huaweiit/job/${jobName}" + ""
+                            int nextBuildNumber = getNextBuilderNumber(buildProject, rpmJenkinsAuthenticationId, jobUrl)
+                            echo("the nextBuildNumber of ${buildProject} : ${nextBuildNumber}")
+
+                            createBuild(buildProject, rpmJenkinsAuthenticationId, jobUrl)
+
+                            pollBuildStatus(nextBuildNumber, timeToPolling, buildProject, rpmJenkinsAuthenticationId, jobUrl)
+                        }
+
+                        echo "downloading ${buildProject} rpm to workspace"
+
+                        script {
+                            def rpmFilename = "${buildProject}-${version}-${release}.${buildArch}.rpm" + ""
+                            sh "curl -s -R -O http://${rpmDeployHost}/${rpmDeployPath}/${rpmFilename}"
+                            if (fileExists(rpmFilename)) {
+                                echo "succeed to download ${buildProject}"
+                            } else {
+                                error "failed to download ${buildProject}"
+                            }
+                        }
                     }
                 }
             }

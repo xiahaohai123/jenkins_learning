@@ -23,7 +23,7 @@ pipeline {
             parallel {
                 stage('shterm2-fileclient') {
                     when {
-                        equals expected: true, actual: buildFileClient
+                        expression { buildFileClient }
                     }
                     environment {
                         buildProject = 'shterm2-fileclient'
@@ -60,7 +60,7 @@ pipeline {
                 }
                 stage('3proxy') {
                     when {
-                        equals expected: true, actual: build3Proxy
+                        expression { build3Proxy }
                     }
                     environment {
                         buildProject = '3proxy'

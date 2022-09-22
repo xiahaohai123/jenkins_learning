@@ -16,14 +16,14 @@ pipeline {
                 jenkinsHost = "repos.shterm.com/jenkins"
                 rpmDeployHost = "10.10.0.12"
                 rpmDeployPath = "yum/shterm/x86_64/Packages"
-                build3Proxy = false
-                buildFileClient = true
+                build3Proxy = 'false'
+                buildFileClient = 'true'
             }
             failFast true
             parallel {
                 stage('shterm2-fileclient') {
                     when {
-                        expression { buildFileClient }
+                        environment name: 'buildFileClient', value: 'true'
                     }
                     environment {
                         buildProject = 'shterm2-fileclient'
@@ -60,7 +60,7 @@ pipeline {
                 }
                 stage('3proxy') {
                     when {
-                        expression { build3Proxy }
+                        environment name: 'build3Proxy', value: 'true'
                     }
                     environment {
                         buildProject = '3proxy'

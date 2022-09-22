@@ -11,13 +11,16 @@ pipeline {
                 echo 'prebuild rpm'
             }
         }
+        stage('make the upgrade repos up to date') {
+            echo 'make the upgrade repos up to date'
+        }
         stage('build and get official rpm') {
             environment {
                 jenkinsHost = "repos.shterm.com/jenkins"
                 rpmDeployHost = "10.10.0.12"
                 rpmDeployPath = "yum/shterm/x86_64/Packages"
                 build3Proxy = 'false'
-                buildFileClient = 'true'
+                buildFileClient = 'false'
             }
             failFast true
             parallel {

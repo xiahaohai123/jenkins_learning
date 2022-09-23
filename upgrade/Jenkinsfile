@@ -1,5 +1,3 @@
-map = ['']
-
 pipeline {
     agent any
     environment {
@@ -12,7 +10,28 @@ pipeline {
             }
         }
         stage('make the upgrade repos up to date') {
-            echo 'make the upgrade repos up to date'
+            steps {
+                echo 'make the upgrade repos up to date TODO'
+            }
+        }
+        stage('use template of upgrade directory in rpm-repos') {
+            steps {
+                script {
+                    def upgradeDir = "ris-huaweiit-upgrade-133" + ""
+                    def upgradeDirPathInRepos = "../rpm-repos-trigger/distro/upgrade/${upgradeDir}" + ""
+                    def permissionTable = ['upgrade': '700',]
+                    if (fileExists(upgradeDir)) {
+                        sh "rm -rf ${upgradeDir}"
+                    }
+                    if (!fileExists(upgradeDirPathInRepos)) {
+                        error "con not find the path: ${upgradeDirPathInRepos}"
+                    }
+                    sh "\\cp -r ${upgradeDirPathInRepos} ."
+                    if (!fileExists(upgradeDir)) {
+                        error "failed to copy upgrade directory: ${upgradeDir} to workspace"
+                    }
+                }
+            }
         }
         stage('build and get official rpm') {
             environment {
@@ -119,11 +138,6 @@ pipeline {
         stage('get lib') {
             steps {
                 echo 'get lib'
-            }
-        }
-        stage('build upgrade package') {
-            steps {
-                echo 'build upgrade package'
             }
         }
         stage('deploy') {

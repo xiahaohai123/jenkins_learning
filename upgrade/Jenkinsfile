@@ -4,11 +4,19 @@ pipeline {
         rpmJenkinsAuthenticationId = '3af1598d-3a55-402f-b59f-c12a8c34cad3'
         distroSpace = 'distro'
         distroSourceSpace = 'distroSource'
+        distroSourceRpmSpace = "${distroSourceSpace}/rpms"
+        upgradeDir = "ris-huaweiit-upgrade-133"
+        upgradeSrcDir = "${upgradeDir}/packages"
+        degradeSrcDir = "${upgradeDir}/old"
     }
     stages {
         stage('prebuild') {
             steps {
                 echo 'prebuild rpm'
+                script {
+                    echo "to reset workspace"
+                    resetDistroWorkspace()
+                }
             }
         }
         stage('make the upgrade repos up to date') {
@@ -19,15 +27,12 @@ pipeline {
         stage('use template of upgrade directory in rpm-repos') {
             steps {
                 script {
-                    def upgradeDir = "ris-huaweiit-upgrade-133" + ""
                     def upgradeDirPathInRepos = "../rpm-repos-trigger/distro/upgrade/${upgradeDir}" + ""
                     def permissionTable = [
                             'upgrade'                    : '700',
                             'check_scripts/pre_check.sh' : '755',
                             'check_scripts/pre_backup.sh': '755'
                     ]
-                    resetDistroWorkspace(distroSpace, distroSourceSpace)
-                    echo "reset workspace"
                     if (!fileExists(upgradeDirPathInRepos)) {
                         error "con not find the path: ${upgradeDirPathInRepos}"
                     }
@@ -47,8 +52,9 @@ pipeline {
                 jenkinsHost = "repos.shterm.com/jenkins"
                 rpmDeployHost = "10.10.0.12"
                 rpmDeployPath = "yum/shterm/x86_64/Packages"
+                rpmDeployFullPath = "${rpmDeployHost}/${rpmDeployPath}"
                 build3Proxy = 'false'
-                buildFileClient = 'false'
+                buildFileClient = 'true'
             }
             failFast true
             parallel {
@@ -62,6 +68,11 @@ pipeline {
                         release = "133.aca"
                         buildArch = "noarch"
                         jobName = "shterm2-fileclient-3.3.8-c-huaweiit"
+                        rpmFilename = "${buildProject}-${version}-${release}.${buildArch}.rpm"
+                        downloadUrl = "http://${rpmDeployFullPath}/${rpmFilename}"
+                        srcRpmPath = "${distroSourceRpmSpace}/${rpmFilename}"
+                        distRpmDir = "${distroSpace}/${upgradeSrcDir}/common"
+                        distRpmPath = "${distRpmDir}/${rpmFilename}"
                     }
                     steps {
                         echo 'build shterm2-fileclient rpm'
@@ -74,18 +85,16 @@ pipeline {
                             createBuild(buildProject, rpmJenkinsAuthenticationId, jobUrl)
 
                             pollBuildStatus(nextBuildNumber, timeToPolling, buildProject, rpmJenkinsAuthenticationId, jobUrl)
-                        }
 
-                        echo "downloading ${buildProject} rpm to workspace"
-
-                        script {
-                            def rpmFilename = "${buildProject}-${version}-${release}.${buildArch}.rpm" + ""
-                            sh "curl -s -R -O http://${rpmDeployHost}/${rpmDeployPath}/${rpmFilename}"
-                            if (fileExists(rpmFilename)) {
+                            echo "downloading ${buildProject} rpm to workspace"
+                            sh "curl -s -R ${downloadUrl} -o ${srcRpmPath}"
+                            if (fileExists(srcRpmPath)) {
                                 echo "succeed to download ${buildProject}"
                             } else {
                                 error "failed to download ${buildProject}"
                             }
+                            createDirIfNotExist(distRpmDir)
+                            sh "cp ${srcRpmPath} ${distRpmPath}"
                         }
                     }
                 }
@@ -112,11 +121,8 @@ pipeline {
                             createBuild(buildProject, rpmJenkinsAuthenticationId, jobUrl)
 
                             pollBuildStatus(nextBuildNumber, timeToPolling, buildProject, rpmJenkinsAuthenticationId, jobUrl)
-                        }
 
-                        echo "downloading ${buildProject} rpm to workspace"
-
-                        script {
+                            echo "downloading ${buildProject} rpm to workspace"
                             def rpmFilename = "${buildProject}-${version}-${release}.${buildArch}.rpm" + ""
                             sh "curl -s -R -O http://${rpmDeployHost}/${rpmDeployPath}/${rpmFilename}"
                             if (fileExists(rpmFilename)) {
@@ -157,14 +163,19 @@ pipeline {
     }
 }
 
-private void resetDistroWorkspace(distroSpace, distroSourceSpace) {
+private void resetDistroWorkspace() {
     echo "to delete dir"
     sh "rm -rf ${distroSpace}"
     echo "to create dir"
     sh "mkdir ${distroSpace}"
     echo "to create sdir"
-    if (!fileExists(distroSourceSpace)) {
-        sh "mkdir ${distroSourceSpace}"
+    createDirIfNotExist(distroSourceSpace)
+    createDirIfNotExist(distroSourceRpmSpace)
+}
+
+private void createDirIfNotExist(dirPath) {
+    if (!fileExists(dirPath)) {
+        sh "mkdir ${dirPath}"
     }
 }
 

@@ -1,3 +1,5 @@
+import java.text.SimpleDateFormat
+
 pipeline {
     agent any
     environment {
@@ -8,23 +10,27 @@ pipeline {
         upgradeDir = "ris-huaweiit-upgrade-133"
         upgradeSrcDir = "${upgradeDir}/packages"
         degradeSrcDir = "${upgradeDir}/old"
+        branchName = "3.3.8-c-huaweiit"
+        gitLabApiToken = "qWG7Gs_rwbAsq2Vp-g9U"
+        gitLabHost = "gitlab.shterm.com"
     }
     stages {
-        stage('prebuild') {
+        stage('Prebuild') {
             steps {
                 echo 'prebuild rpm'
+                echo "The branch is ${env.BRANCH_NAME}"
                 script {
                     echo "to reset workspace"
                     resetDistroWorkspace()
                 }
             }
         }
-        stage('make the upgrade repos up to date') {
+        stage('Make the upgrade repos up to date') {
             steps {
                 echo 'make the upgrade repos up to date TODO'
             }
         }
-        stage('use template of upgrade directory in rpm-repos') {
+        stage('Use template of upgrade directory in rpm-repos') {
             steps {
                 script {
                     def upgradeDirPathInRepos = "../rpm-repos-trigger/distro/upgrade/${upgradeDir}" + ""
@@ -47,7 +53,7 @@ pipeline {
                 }
             }
         }
-        stage('build and get official rpm') {
+        stage('Build and get official rpm') {
             environment {
                 jenkinsHost = "repos.shterm.com/jenkins"
                 rpmDeployHost = "10.10.0.12"
@@ -55,6 +61,7 @@ pipeline {
                 rpmDeployFullPath = "${rpmDeployHost}/${rpmDeployPath}"
                 build3Proxy = 'false'
                 buildFileClient = 'true'
+                buildProjectId = "81"
             }
             failFast true
             parallel {
@@ -73,26 +80,45 @@ pipeline {
                         srcRpmPath = "${distroSourceRpmSpace}/${rpmFilename}"
                         distRpmDir = "${distroSpace}/${upgradeSrcDir}/common"
                         distRpmPath = "${distRpmDir}/${rpmFilename}"
+                        srcProjectId = "250"
                     }
                     steps {
-                        echo 'build shterm2-fileclient rpm'
                         script {
-                            int timeToPolling = 10
-                            def jobUrl = "http://${jenkinsHost}/view/HUAWEI/job/3.3.8-c-huaweiit/job/${jobName}" + ""
-                            int nextBuildNumber = getNextBuilderNumber(buildProject, rpmJenkinsAuthenticationId, jobUrl)
-                            echo("the nextBuildNumber of ${buildProject} : ${nextBuildNumber}")
-
-                            createBuild(buildProject, rpmJenkinsAuthenticationId, jobUrl)
-
-                            pollBuildStatus(nextBuildNumber, timeToPolling, buildProject, rpmJenkinsAuthenticationId, jobUrl)
-
-                            echo "downloading ${buildProject} rpm to workspace"
-                            sh "curl -s -R ${downloadUrl} -o ${srcRpmPath}"
-                            if (fileExists(srcRpmPath)) {
-                                echo "succeed to download ${buildProject}"
+                            echo "check if ${buildProject}.rpm should be update"
+                            // 不明原因，请求gitlab需要将时间减少8h
+                            boolean updateRpm = false
+                            Date rpmBuildDate = getRpmBuildDate(srcRpmPath)
+                            if (rpmBuildDate != null) {
+                                echo "the last build date of ${buildProject} is: ${rpmBuildDate.toString()}"
+                                boolean srcProjectUpdate = ifSrcProjectUpdate(srcProjectId, branchName, rpmBuildDate)
+                                if (srcProjectUpdate) {
+                                    updateRpm = true
+                                }
                             } else {
-                                error "failed to download ${buildProject}"
+                                echo "can not get build date of ${buildProject}, update rpm"
+                                updateRpm = true
                             }
+                            // 检查在Source目录下的rpm的buildDate
+                            // 通过gitlab检查对应项目对应分支是否有commit更新
+                            // 通过gitlab检查rpm-repos对应分支的对应项目构建目录下是否有新commit
+
+                            if (updateRpm) {
+                                echo "build ${buildProject} rpm"
+                                int timeToPolling = 10
+                                def jobUrl = "http://${jenkinsHost}/view/HUAWEI/job/3.3.8-c-huaweiit/job/${jobName}" + ""
+                                int nextBuildNumber = getNextBuilderNumber(buildProject, rpmJenkinsAuthenticationId, jobUrl)
+                                echo("the nextBuildNumber of ${buildProject} : ${nextBuildNumber}")
+                                createBuild(buildProject, rpmJenkinsAuthenticationId, jobUrl)
+                                pollBuildStatus(nextBuildNumber, timeToPolling, buildProject, rpmJenkinsAuthenticationId, jobUrl)
+                                echo "downloading ${buildProject} rpm to workspace"
+                                sh "curl -s -R ${downloadUrl} -o ${srcRpmPath}"
+                                if (fileExists(srcRpmPath)) {
+                                    echo "succeed to download ${buildProject}"
+                                } else {
+                                    error "failed to download ${buildProject}"
+                                }
+                            }
+
                             createDirIfNotExist(distRpmDir)
                             sh "cp ${srcRpmPath} ${distRpmPath}"
                         }
@@ -110,7 +136,7 @@ pipeline {
                         jobName = "3proxy-3.3.8-c-huaweiit"
                     }
                     steps {
-                        echo 'build 3proxy rpm'
+                        echo "build ${buildProject} rpm"
 
                         script {
                             int timeToPolling = 10
@@ -225,4 +251,43 @@ private int getNextBuilderNumber(buildProject, authentication, jobUrl) {
     def jsonResponse = readJSON text: response.content
     int nextBuildNumber = jsonResponse.nextBuildNumber
     return nextBuildNumber
+}
+
+private Date getRpmBuildDate(rpmPath) {
+    if (!fileExists(rpmPath)) {
+        return null
+    }
+    String shResponse = sh(script: "rpm -qpi ${rpmPath}", returnStdout: true)
+    String matchString = "Build Date  : "
+    def lines = shResponse.split('\n')
+    for (line in lines) {
+        if (line.startsWith(matchString)) {
+            String buildDate = line.substring(matchString.length())
+            SimpleDateFormat srcSdf = new SimpleDateFormat("EEE MMM dd HH:mm:ss yyyy", Locale.ENGLISH)
+            srcSdf.setTimeZone(TimeZone.getTimeZone("Asia/Shanghai"))
+            return srcSdf.parse(buildDate)
+        }
+    }
+    return null
+}
+
+private boolean ifSrcProjectUpdate(String projectId, String branchName, rpmBuildDate) {
+    SimpleDateFormat gitlabSdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss")
+    gitlabSdf.setTimeZone(TimeZone.getTimeZone("UTC"))
+    String formattedDate = gitlabSdf.format(rpmBuildDate)
+    def response = httpRequest ignoreSslErrors: true, customHeaders: [[name: "PRIVATE-TOKEN", value: gitLabApiToken]],
+            url: "https://${gitLabHost}/api/v4/projects/${projectId}/repository/commits?since=${formattedDate}&ref_name=${branchName}"
+    if (response.status != 200) {
+        error("failed to query gitlab for update info")
+    }
+    echo response.content
+    def jsonResponse = readJSON text: response.content
+    // todo 工作断点
+    echo jsonResponse.length
+    if (jsonResponse.length == 0) {
+        echo "no commits"
+    } else {
+        echo "there is some commits"
+    }
+    return false
 }

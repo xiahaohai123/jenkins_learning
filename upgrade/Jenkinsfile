@@ -2,6 +2,8 @@ pipeline {
     agent any
     environment {
         rpmJenkinsAuthenticationId = '3af1598d-3a55-402f-b59f-c12a8c34cad3'
+        distroSpace = 'distro'
+        distroSourceSpace = 'distroSource'
     }
     stages {
         stage('prebuild') {
@@ -19,16 +21,23 @@ pipeline {
                 script {
                     def upgradeDir = "ris-huaweiit-upgrade-133" + ""
                     def upgradeDirPathInRepos = "../rpm-repos-trigger/distro/upgrade/${upgradeDir}" + ""
-                    def permissionTable = ['upgrade': '700',]
-                    if (fileExists(upgradeDir)) {
-                        sh "rm -rf ${upgradeDir}"
-                    }
+                    def permissionTable = [
+                            'upgrade'                    : '700',
+                            'check_scripts/pre_check.sh' : '755',
+                            'check_scripts/pre_backup.sh': '755'
+                    ]
+                    resetDistroWorkspace(distroSpace, distroSourceSpace)
+                    echo "reset workspace"
                     if (!fileExists(upgradeDirPathInRepos)) {
                         error "con not find the path: ${upgradeDirPathInRepos}"
                     }
-                    sh "\\cp -r ${upgradeDirPathInRepos} ."
-                    if (!fileExists(upgradeDir)) {
+                    sh "\\cp -rf ${upgradeDirPathInRepos} ./${distroSpace}/"
+                    if (!fileExists("${distroSpace}/${upgradeDir}")) {
                         error "failed to copy upgrade directory: ${upgradeDir} to workspace"
+                    }
+                    echo "copied template"
+                    permissionTable.each { item ->
+                        sh "chmod ${item.value} ${distroSpace}/${upgradeDir}/${item.key}"
                     }
                 }
             }
@@ -145,6 +154,17 @@ pipeline {
                 echo 'deploy'
             }
         }
+    }
+}
+
+private void resetDistroWorkspace(distroSpace, distroSourceSpace) {
+    echo "to delete dir"
+    sh "rm -rf ${distroSpace}"
+    echo "to create dir"
+    sh "mkdir ${distroSpace}"
+    echo "to create sdir"
+    if (!fileExists(distroSourceSpace)) {
+        sh "mkdir ${distroSourceSpace}"
     }
 }
 

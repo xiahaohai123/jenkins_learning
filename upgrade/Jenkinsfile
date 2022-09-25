@@ -1,5 +1,8 @@
 import java.text.SimpleDateFormat
 
+def oldRpmMap = ['shterm2-fileclient': ['path': '/temp/xiahh/huawei-upgrade/huaweiit/history/rpms/',
+                                        'name': 'shterm2-fileclient-3.3.8-132.aca.noarch.rpm']]
+
 pipeline {
     agent any
     environment {
@@ -87,7 +90,6 @@ pipeline {
                     steps {
                         script {
                             echo "check if ${buildProject}.rpm should be update"
-                            // 不明原因，请求gitlab需要将时间减少8h
                             boolean updateRpm = false
                             Date rpmBuildDate = getRpmBuildDate(srcRpmPath)
                             if (rpmBuildDate != null) {
@@ -99,7 +101,7 @@ pipeline {
                                     updateRpm = true
                                 }
                             } else {
-                                echo "can not get build date of ${buildProject}, update rpm"
+                                echo "can not get build date of ${buildProject}.rpm, update rpm"
                                 updateRpm = true
                             }
                             // 检查在Source目录下的rpm的buildDate
@@ -167,33 +169,44 @@ pipeline {
                 }
             }
         }
-        stage('get official old rpm') {
-            steps {
-                echo 'get official old rpm'
+        stage('Get official old rpm') {
+            environment {
+                oldRpmDwonloadHost = "10.13.0.5"
+            }
+            failFast true
+            parallel {
+                stage('Get shterm2-fileclient old rpm') {
+                    environment {
+                        buildProject = 'shterm2-fileclient'
+                        degradeRpmDir = "${distroSpace}/${degradeSrcDir}/common"
+                    }
+                    steps {
+                        script {
+                            def oldRpmData = oldRpmMap.get(buildProject)
+                            def path = oldRpmData.get('path')
+                            def filename = oldRpmData.get('name')
+                            def downloadUrl = "http://${oldRpmDwonloadHost}${path}${filename}" + ""
+                            def degradeRpmPath = "${degradeRpmDir}/${filename}" + ""
+                            createDirIfNotExist(degradeRpmDir)
+                            sh "curl -s -R ${downloadUrl} -o ${degradeRpmPath}"
+                        }
+                    }
+                }
             }
         }
-        stage('get official new script') {
-            steps {
-                echo 'get official new script'
-            }
-        }
-        stage('get official old script') {
-            steps {
-                echo 'get official old script'
-            }
-        }
-        stage('get lib') {
+        stage('Get lib') {
             steps {
                 echo 'get lib'
             }
         }
-        stage('deploy') {
+        stage('Deploy') {
             steps {
                 echo 'deploy'
             }
         }
     }
 }
+
 
 private void resetDistroWorkspace() {
     echo "to delete dir"
@@ -207,7 +220,7 @@ private void resetDistroWorkspace() {
 
 private void createDirIfNotExist(dirPath) {
     if (!fileExists(dirPath)) {
-        sh "mkdir ${dirPath}"
+        sh "mkdir -p ${dirPath}"
     }
 }
 

@@ -5,7 +5,9 @@ def oldRpmMap = [
         'shterm2-fileclient': ['path': oldRpmDownloadPath,
                                'name': 'shterm2-fileclient-3.3.8-132.aca.noarch.rpm'],
         'shterm2-guiclient' : ['path': oldRpmDownloadPath,
-                               'name': 'shterm2-guiclient-3.3.8-132.aca.noarch.rpm']
+                               'name': 'shterm2-guiclient-3.3.8-132.aca.noarch.rpm'],
+        '3proxy'            : ['path': oldRpmDownloadPath,
+                               'name': '3proxy-0.9.5-2.el7.x86_64.rpm']
 ]
 
 pipeline {
@@ -70,7 +72,7 @@ pipeline {
                 rpmDeployPath = "yum/shterm/x86_64/Packages"
                 rpmDeployFullPath = "${rpmDeployHost}/${rpmDeployPath}"
                 build3Proxy = 'false'
-                buildFileClient = 'false'
+                buildFileClient = 'true'
                 buildGuiClient = 'true'
                 buildProjectId = "81"
             }
@@ -81,59 +83,40 @@ pipeline {
                         environment name: 'buildFileClient', value: 'true'
                     }
                     environment {
-                        buildProject = 'shterm2-fileclient'
+                        projectName = 'shterm2-fileclient'
                         repoBuildPath = "shterm2-fileclient"
                         version = "3.3.8"
                         release = "133.aca"
                         buildArch = "noarch"
                         jobName = "shterm2-fileclient-3.3.8-c-huaweiit"
-                        rpmFilename = "${buildProject}-${version}-${release}.${buildArch}.rpm"
-                        downloadUrl = "http://${rpmDeployFullPath}/${rpmFilename}"
-                        srcRpmPath = "${distroSourceRpmSpace}/${rpmFilename}"
                         distRpmDir = "${distroSpace}/${upgradeSrcDir}/common"
-                        distRpmPath = "${distRpmDir}/${rpmFilename}"
+                        degradeRpmDir = "${distroSpace}/${degradeSrcDir}/common"
                         srcProjectId = "250"
                     }
                     steps {
                         script {
-                            echo "check if ${buildProject}.rpm should be update"
-                            boolean updateRpm = false
-                            Date rpmBuildDate = getRpmBuildDate(srcRpmPath)
-                            if (rpmBuildDate != null) {
-                                echo "the last build date of ${buildProject} is: ${rpmBuildDate}"
-                                boolean srcProjectUpdate = ifSrcProjectUpdate(srcProjectId, branchName, rpmBuildDate)
-                                boolean buildProjectUpdate = isBuildProjectUpdate(buildProjectId, branchName,
-                                        repoBuildPath, rpmBuildDate)
-                                if (srcProjectUpdate || buildProjectUpdate) {
-                                    updateRpm = true
-                                }
-                            } else {
-                                echo "can not get build date of ${buildProject}.rpm, update rpm"
-                                updateRpm = true
-                            }
-                            // 检查在Source目录下的rpm的buildDate
-                            // 通过gitlab检查对应项目对应分支是否有commit更新
-                            // 通过gitlab检查rpm-repos对应分支的对应项目构建目录下是否有新commit
+                            RpmBuildItem fileClientBuildItem = new RpmBuildItem()
+                            fileClientBuildItem.projectName = projectName
+                            fileClientBuildItem.repoBuildPath = repoBuildPath
+                            fileClientBuildItem.version = version
+                            fileClientBuildItem.release = release
+                            fileClientBuildItem.buildArch = buildArch
+                            fileClientBuildItem.rpmJobName = jobName
+                            fileClientBuildItem.srcRpmDir = distroSourceRpmSpace
+                            fileClientBuildItem.distRpmDir = distRpmDir
+                            fileClientBuildItem.srcProjectId = srcProjectId
+                            fileClientBuildItem.buildProjectId = buildProjectId
+                            fileClientBuildItem.branchName = branchName
+                            fileClientBuildItem.degradeRpmDir = degradeRpmDir
+                            fileClientBuildItem.jenkinsContext = this
 
-                            if (updateRpm) {
-                                echo "build ${buildProject} rpm"
-                                int timeToPolling = 10
-                                def jobUrl = "http://${jenkinsHost}/view/HUAWEI/job/3.3.8-c-huaweiit/job/${jobName}" + ""
-                                int nextBuildNumber = getNextBuilderNumber(buildProject, rpmJenkinsAuthenticationId, jobUrl)
-                                echo("the nextBuildNumber of ${buildProject} : ${nextBuildNumber}")
-                                createBuild(buildProject, rpmJenkinsAuthenticationId, jobUrl)
-                                pollBuildStatus(nextBuildNumber, timeToPolling, buildProject, rpmJenkinsAuthenticationId, jobUrl)
-                                echo "downloading ${buildProject} rpm to workspace"
-                                sh "curl -s -R ${downloadUrl} -o ${srcRpmPath}"
-                                if (fileExists(srcRpmPath)) {
-                                    echo "succeed to download ${buildProject}"
-                                } else {
-                                    error "failed to download ${buildProject}"
-                                }
-                            }
+                            def oldRpmData = oldRpmMap.get(projectName)
+                            def path = oldRpmData.get('path')
+                            def filename = oldRpmData.get('name')
+                            fileClientBuildItem.remoteDegradeRpmDir = path
+                            fileClientBuildItem.degradeRpmFilename = filename
 
-                            createDirIfNotExist(distRpmDir)
-                            sh "cp ${srcRpmPath} ${distRpmPath}"
+                            fileClientBuildItem.buildAndAssemble()
                         }
                     }
                 }
@@ -154,28 +137,28 @@ pipeline {
                     }
                     steps {
                         script {
-                            RpmBuildItem guiBuildItem = new RpmBuildItem()
-                            guiBuildItem.projectName = projectName
-                            guiBuildItem.repoBuildPath = repoBuildPath
-                            guiBuildItem.version = version
-                            guiBuildItem.release = release
-                            guiBuildItem.buildArch = buildArch
-                            guiBuildItem.rpmJobName = jobName
-                            guiBuildItem.srcRpmDir = distroSourceRpmSpace
-                            guiBuildItem.distRpmDir = distRpmDir
-                            guiBuildItem.srcProjectId = srcProjectId
-                            guiBuildItem.buildProjectId = buildProjectId
-                            guiBuildItem.branchName = branchName
-                            guiBuildItem.degradeRpmDir = degradeRpmDir
-                            guiBuildItem.jenkinsContext = this
+                            RpmBuildItem guiClientBuildItem = new RpmBuildItem()
+                            guiClientBuildItem.projectName = projectName
+                            guiClientBuildItem.repoBuildPath = repoBuildPath
+                            guiClientBuildItem.version = version
+                            guiClientBuildItem.release = release
+                            guiClientBuildItem.buildArch = buildArch
+                            guiClientBuildItem.rpmJobName = jobName
+                            guiClientBuildItem.srcRpmDir = distroSourceRpmSpace
+                            guiClientBuildItem.distRpmDir = distRpmDir
+                            guiClientBuildItem.srcProjectId = srcProjectId
+                            guiClientBuildItem.buildProjectId = buildProjectId
+                            guiClientBuildItem.branchName = branchName
+                            guiClientBuildItem.degradeRpmDir = degradeRpmDir
+                            guiClientBuildItem.jenkinsContext = this
 
                             def oldRpmData = oldRpmMap.get(projectName)
                             def path = oldRpmData.get('path')
                             def filename = oldRpmData.get('name')
-                            guiBuildItem.remoteDegradeRpmDir = path
-                            guiBuildItem.degradeRpmFilename = filename
+                            guiClientBuildItem.remoteDegradeRpmDir = path
+                            guiClientBuildItem.degradeRpmFilename = filename
 
-                            guiBuildItem.buildAndAssemble()
+                            guiClientBuildItem.buildAndAssemble()
                         }
                     }
                 }
@@ -212,34 +195,6 @@ pipeline {
                             } else {
                                 error "failed to download ${buildProject}"
                             }
-                        }
-                    }
-                }
-            }
-        }
-        stage('Get official old rpm') {
-            environment {
-                oldRpmDwonloadHost = "10.13.0.5"
-            }
-            failFast true
-            parallel {
-                stage('Get shterm2-fileclient old rpm') {
-                    when {
-                        environment name: 'buildFileClient', value: 'true'
-                    }
-                    environment {
-                        buildProject = 'shterm2-fileclient'
-                        degradeRpmDir = "${distroSpace}/${degradeSrcDir}/common"
-                    }
-                    steps {
-                        script {
-                            def oldRpmData = oldRpmMap.get(buildProject)
-                            def path = oldRpmData.get('path')
-                            def filename = oldRpmData.get('name')
-                            def downloadUrl = "http://${oldRpmDwonloadHost}${path}${filename}" + ""
-                            def degradeRpmPath = "${degradeRpmDir}/${filename}" + ""
-                            createDirIfNotExist(degradeRpmDir)
-                            sh "curl -s -R ${downloadUrl} -o ${degradeRpmPath}"
                         }
                     }
                 }

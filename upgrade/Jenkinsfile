@@ -1,7 +1,12 @@
 import java.text.SimpleDateFormat
 
-def oldRpmMap = ['shterm2-fileclient': ['path': '/temp/xiahh/huawei-upgrade/huaweiit/history/rpms/',
-                                        'name': 'shterm2-fileclient-3.3.8-132.aca.noarch.rpm']]
+String oldRpmDownloadPath = '/temp/xiahh/huawei-upgrade/huaweiit/history/rpms/'
+def oldRpmMap = [
+        'shterm2-fileclient': ['path': oldRpmDownloadPath,
+                               'name': 'shterm2-fileclient-3.3.8-132.aca.noarch.rpm'],
+        'shterm2-guiclient' : ['path': oldRpmDownloadPath,
+                               'name': 'shterm2-guiclient-3.3.8-132.aca.noarch.rpm']
+]
 
 pipeline {
     agent any
@@ -17,6 +22,7 @@ pipeline {
 //        gitLabApiToken = "qWG7Gs_rwbAsq2Vp-g9U"
         gitLabApiToken = credentials("GITLAB_API_TOKEN")
         gitLabHost = "gitlab.shterm.com"
+        oldRpmDwonloadHost = "10.13.0.5"
     }
     stages {
         stage('Prebuild') {
@@ -31,7 +37,7 @@ pipeline {
         }
         stage('Make the upgrade repos up to date') {
             steps {
-                echo 'make the upgrade repos up to date TODO'
+                echo 'make the upgrade repos up to date'
             }
         }
         stage('Use template of upgrade directory in rpm-repos') {
@@ -143,6 +149,7 @@ pipeline {
                         buildArch = "noarch"
                         jobName = "shterm2-guiclient-3.3.8-c-huaweiit"
                         distRpmDir = "${distroSpace}/${upgradeSrcDir}/common"
+                        degradeRpmDir = "${distroSpace}/${degradeSrcDir}/common"
                         srcProjectId = "96"
                     }
                     steps {
@@ -159,7 +166,15 @@ pipeline {
                             guiBuildItem.srcProjectId = srcProjectId
                             guiBuildItem.buildProjectId = buildProjectId
                             guiBuildItem.branchName = branchName
+                            guiBuildItem.degradeRpmDir = degradeRpmDir
                             guiBuildItem.jenkinsContext = this
+
+                            def oldRpmData = oldRpmMap.get(projectName)
+                            def path = oldRpmData.get('path')
+                            def filename = oldRpmData.get('name')
+                            guiBuildItem.remoteDegradeRpmDir = path
+                            guiBuildItem.degradeRpmFilename = filename
+
                             guiBuildItem.buildAndAssemble()
                         }
                     }
@@ -390,6 +405,10 @@ class RpmBuildItem {
     String srcProjectId
     String buildProjectId
     String branchName
+    /** 降级用安装包存放目录 */
+    String degradeRpmDir
+    String remoteDegradeRpmDir
+    String degradeRpmFilename
     /** jenkins 上下文，用以访问jenkinsfile pipeline可访问的资源 */
     def jenkinsContext
     /** rpm包文件名 */
@@ -415,13 +434,26 @@ class RpmBuildItem {
         if (shouldUpdateRpm) {
             buildAndDownloadRpm()
         }
-        assemble()
-        jenkinsContext.echo "${projectName} assembled"
+        assembleUpgrade()
+        assembleDegrade()
     }
 
-    private void assemble() {
+    private void assembleUpgrade() {
         jenkinsContext.createDirIfNotExist(distRpmDir)
         jenkinsContext.sh "cp ${srcRpmPath} ${distRpmPath}"
+        jenkinsContext.echo "${rpmFilename} assembled for upgrade"
+    }
+
+    private void assembleDegrade() {
+        def downloadUrl = "http://${jenkinsContext.oldRpmDwonloadHost}${remoteDegradeRpmDir}${degradeRpmFilename}" + ""
+        jenkinsContext.createDirIfNotExist(degradeRpmDir)
+        def degradeRpmPath = "${degradeRpmDir}/${degradeRpmFilename}" + ""
+        if (isResourceDownloadable(downloadUrl)) {
+            jenkinsContext.sh "curl -s -R ${downloadUrl} -o ${degradeRpmPath}"
+            jenkinsContext.echo "${degradeRpmFilename} assembled for degrade"
+        } else {
+            jenkinsContext.error "there is no ${degradeRpmFilename} in old rpm server"
+        }
     }
 
     private void buildAndDownloadRpm() {
@@ -432,7 +464,7 @@ class RpmBuildItem {
         jenkinsContext.echo("the nextBuildNumber of ${projectName} : ${nextBuildNumber}")
         createBuild(jenkinsContext.rpmJenkinsAuthenticationId, jobUrl)
         pollBuildStatus(nextBuildNumber, pollDuration, jenkinsContext.rpmJenkinsAuthenticationId, jobUrl)
-        if (isDeployHasRpm()) {
+        if (isResourceDownloadable(downloadUrl)) {
             jenkinsContext.echo "downloading ${projectName} rpm to workspace"
             downloadRpmToSrc()
         } else {
@@ -538,12 +570,12 @@ class RpmBuildItem {
     }
 
     private tryDownloadRpmFromDeploy() {
-        if (isDeployHasRpm()) {
+        if (isResourceDownloadable(downloadUrl)) {
             downloadRpmToSrc()
         }
     }
 
-    private boolean isDeployHasRpm() {
+    private boolean isResourceDownloadable(String downloadUrl) {
         String headers = jenkinsContext.sh(script: "curl --head ${downloadUrl}", returnStdout: true)
         String matchString = "HTTP/1.1 "
         def lines = headers.split('\n')
@@ -595,7 +627,7 @@ class RpmBuildItem {
                     "since ${rpmBuildDate} in path:${path}"
             return false
         } else {
-            jenkinsContext.echo "there are ${commitQuantity} commits for project: ${projectId} branch :${branchName} " +
+            jenkinsContext.echo "there are ${commitQuantity} commits for project: ${projectId} branch: ${branchName} " +
                     "since ${rpmBuildDate} in path: ${path}"
             return true
         }

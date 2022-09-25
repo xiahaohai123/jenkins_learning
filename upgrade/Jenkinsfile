@@ -71,7 +71,7 @@ pipeline {
                 rpmDeployHost = "10.10.0.12"
                 rpmDeployPath = "yum/shterm/x86_64/Packages"
                 rpmDeployFullPath = "${rpmDeployHost}/${rpmDeployPath}"
-                build3Proxy = 'false'
+                build3Proxy = 'true'
                 buildFileClient = 'true'
                 buildGuiClient = 'true'
                 buildProjectId = "81"
@@ -106,7 +106,8 @@ pipeline {
                             fileClientBuildItem.distRpmDir = distRpmDir
                             fileClientBuildItem.srcProjectId = srcProjectId
                             fileClientBuildItem.buildProjectId = buildProjectId
-                            fileClientBuildItem.branchName = branchName
+                            fileClientBuildItem.srcProjectBranch = branchName
+                            fileClientBuildItem.buildProjectBranch = branchName
                             fileClientBuildItem.degradeRpmDir = degradeRpmDir
                             fileClientBuildItem.jenkinsContext = this
 
@@ -148,7 +149,8 @@ pipeline {
                             guiClientBuildItem.distRpmDir = distRpmDir
                             guiClientBuildItem.srcProjectId = srcProjectId
                             guiClientBuildItem.buildProjectId = buildProjectId
-                            guiClientBuildItem.branchName = branchName
+                            guiClientBuildItem.srcProjectBranch = branchName
+                            guiClientBuildItem.buildProjectBranch = branchName
                             guiClientBuildItem.degradeRpmDir = degradeRpmDir
                             guiClientBuildItem.jenkinsContext = this
 
@@ -167,34 +169,42 @@ pipeline {
                         environment name: 'build3Proxy', value: 'true'
                     }
                     environment {
-                        buildProject = '3proxy'
+                        projectName = '3proxy'
+                        repoBuildPath = "3proxy"
                         version = "0.9.3"
                         release = "133.aca"
                         buildArch = "x86_64"
                         jobName = "3proxy-3.3.8-c-huaweiit"
+                        distRpmDir = "${distroSpace}/${upgradeSrcDir}/3proxy"
+                        degradeRpmDir = "${distroSpace}/${degradeSrcDir}/3proxy"
+                        srcProjectId = "506"
+                        srcProjectBranch = "master"
                     }
                     steps {
-                        echo "build ${buildProject} rpm"
                         script {
-                            int timeToPolling = 10
-                            def jobUrl = "http://${jenkinsHost}/view/HUAWEI/job/3.3.8-c-huaweiit/job/${jobName}" + ""
-                            int nextBuildNumber = getNextBuilderNumber(buildProject, rpmJenkinsAuthenticationId,
-                                    jobUrl)
-                            echo("the nextBuildNumber of ${buildProject} : ${nextBuildNumber}")
+                            RpmBuildItem thProxyClientBuildItem = new RpmBuildItem()
+                            thProxyClientBuildItem.projectName = projectName
+                            thProxyClientBuildItem.repoBuildPath = repoBuildPath
+                            thProxyClientBuildItem.version = version
+                            thProxyClientBuildItem.release = release
+                            thProxyClientBuildItem.buildArch = buildArch
+                            thProxyClientBuildItem.rpmJobName = jobName
+                            thProxyClientBuildItem.srcRpmDir = distroSourceRpmSpace
+                            thProxyClientBuildItem.distRpmDir = distRpmDir
+                            thProxyClientBuildItem.srcProjectId = srcProjectId
+                            thProxyClientBuildItem.buildProjectId = buildProjectId
+                            thProxyClientBuildItem.srcProjectBranch = srcProjectBranch
+                            thProxyClientBuildItem.buildProjectBranch = branchName
+                            thProxyClientBuildItem.degradeRpmDir = degradeRpmDir
+                            thProxyClientBuildItem.jenkinsContext = this
 
-                            createBuild(buildProject, rpmJenkinsAuthenticationId, jobUrl)
+                            def oldRpmData = oldRpmMap.get(projectName)
+                            def path = oldRpmData.get('path')
+                            def filename = oldRpmData.get('name')
+                            thProxyClientBuildItem.remoteDegradeRpmDir = path
+                            thProxyClientBuildItem.degradeRpmFilename = filename
 
-                            pollBuildStatus(nextBuildNumber, timeToPolling, buildProject, rpmJenkinsAuthenticationId,
-                                    jobUrl)
-
-                            echo "downloading ${buildProject} rpm to workspace"
-                            def rpmFilename = "${buildProject}-${version}-${release}.${buildArch}.rpm" + ""
-                            sh "curl -s -R -O http://${rpmDeployHost}/${rpmDeployPath}/${rpmFilename}"
-                            if (fileExists(rpmFilename)) {
-                                echo "succeed to download ${buildProject}"
-                            } else {
-                                error "failed to download ${buildProject}"
-                            }
+                            thProxyClientBuildItem.buildAndAssemble()
                         }
                     }
                 }
@@ -359,7 +369,8 @@ class RpmBuildItem {
     String distRpmDir
     String srcProjectId
     String buildProjectId
-    String branchName
+    String buildProjectBranch
+    String srcProjectBranch
     /** 降级用安装包存放目录 */
     String degradeRpmDir
     String remoteDegradeRpmDir
@@ -395,7 +406,7 @@ class RpmBuildItem {
 
     private void assembleUpgrade() {
         jenkinsContext.createDirIfNotExist(distRpmDir)
-        jenkinsContext.sh "cp ${srcRpmPath} ${distRpmPath}"
+        jenkinsContext.sh "cp -p ${srcRpmPath} ${distRpmPath}"
         jenkinsContext.echo "${rpmFilename} assembled for upgrade"
     }
 
@@ -491,8 +502,9 @@ class RpmBuildItem {
         boolean shouldUpdateRpm = false
         if (rpmBuildDate != null) {
             jenkinsContext.echo "the last build date of ${rpmFilename} is: ${rpmBuildDate}"
-            boolean srcProjectUpdate = ifSrcProjectUpdate(srcProjectId, branchName, rpmBuildDate)
-            boolean buildProjectUpdate = isBuildProjectUpdate(buildProjectId, branchName, repoBuildPath, rpmBuildDate)
+            boolean srcProjectUpdate = ifSrcProjectUpdate(srcProjectId, srcProjectBranch, rpmBuildDate)
+            boolean buildProjectUpdate = isBuildProjectUpdate(buildProjectId, buildProjectBranch, repoBuildPath,
+                    rpmBuildDate)
             if (srcProjectUpdate || buildProjectUpdate) {
                 shouldUpdateRpm = true
             }

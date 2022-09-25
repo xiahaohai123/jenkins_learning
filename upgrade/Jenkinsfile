@@ -11,7 +11,8 @@ pipeline {
         upgradeSrcDir = "${upgradeDir}/packages"
         degradeSrcDir = "${upgradeDir}/old"
         branchName = "3.3.8-c-huaweiit"
-        gitLabApiToken = "qWG7Gs_rwbAsq2Vp-g9U"
+//        gitLabApiToken = "qWG7Gs_rwbAsq2Vp-g9U"
+        gitLabApiToken = credentials("GITLAB_API_TOKEN")
         gitLabHost = "gitlab.shterm.com"
     }
     stages {
@@ -71,6 +72,7 @@ pipeline {
                     }
                     environment {
                         buildProject = 'shterm2-fileclient'
+                        repoBuildPath = "shterm2-fileclient"
                         version = "3.3.8"
                         release = "133.aca"
                         buildArch = "noarch"
@@ -89,9 +91,11 @@ pipeline {
                             boolean updateRpm = false
                             Date rpmBuildDate = getRpmBuildDate(srcRpmPath)
                             if (rpmBuildDate != null) {
-                                echo "the last build date of ${buildProject} is: ${rpmBuildDate.toString()}"
+                                echo "the last build date of ${buildProject} is: ${rpmBuildDate}"
                                 boolean srcProjectUpdate = ifSrcProjectUpdate(srcProjectId, branchName, rpmBuildDate)
-                                if (srcProjectUpdate) {
+                                boolean buildProjectUpdate = isBuildProjectUpdate(buildProjectId, branchName,
+                                        repoBuildPath, rpmBuildDate)
+                                if (srcProjectUpdate || buildProjectUpdate) {
                                     updateRpm = true
                                 }
                             } else {
@@ -141,12 +145,14 @@ pipeline {
                         script {
                             int timeToPolling = 10
                             def jobUrl = "http://${jenkinsHost}/view/HUAWEI/job/3.3.8-c-huaweiit/job/${jobName}" + ""
-                            int nextBuildNumber = getNextBuilderNumber(buildProject, rpmJenkinsAuthenticationId, jobUrl)
+                            int nextBuildNumber = getNextBuilderNumber(buildProject, rpmJenkinsAuthenticationId,
+                                    jobUrl)
                             echo("the nextBuildNumber of ${buildProject} : ${nextBuildNumber}")
 
                             createBuild(buildProject, rpmJenkinsAuthenticationId, jobUrl)
 
-                            pollBuildStatus(nextBuildNumber, timeToPolling, buildProject, rpmJenkinsAuthenticationId, jobUrl)
+                            pollBuildStatus(nextBuildNumber, timeToPolling, buildProject, rpmJenkinsAuthenticationId,
+                                    jobUrl)
 
                             echo "downloading ${buildProject} rpm to workspace"
                             def rpmFilename = "${buildProject}-${version}-${release}.${buildArch}.rpm" + ""
@@ -271,23 +277,53 @@ private Date getRpmBuildDate(rpmPath) {
     return null
 }
 
-private boolean ifSrcProjectUpdate(String projectId, String branchName, rpmBuildDate) {
-    SimpleDateFormat gitlabSdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss")
-    gitlabSdf.setTimeZone(TimeZone.getTimeZone("UTC"))
-    String formattedDate = gitlabSdf.format(rpmBuildDate)
+private boolean ifSrcProjectUpdate(String projectId, String branchName, Date rpmBuildDate) {
+    String formattedDate = formatDate4Gitlab(rpmBuildDate)
     def response = httpRequest ignoreSslErrors: true, customHeaders: [[name: "PRIVATE-TOKEN", value: gitLabApiToken]],
-            url: "https://${gitLabHost}/api/v4/projects/${projectId}/repository/commits?since=${formattedDate}&ref_name=${branchName}"
+            url: "https://${gitLabHost}/api/v4/projects/${projectId}/repository/commits?since=${formattedDate}" +
+                    "&ref_name=${branchName}"
     if (response.status != 200) {
         error("failed to query gitlab for update info")
     }
-    echo response.content
     def jsonResponse = readJSON text: response.content
-    // todo 工作断点
-    echo jsonResponse.length
-    if (jsonResponse.length == 0) {
-        echo "no commits"
+    def commitQuantity = jsonResponse.size()
+    if (commitQuantity == 0) {
+        echo "there is no commit for project: ${projectId} branch: ${branchName} since ${rpmBuildDate}"
+        return false
     } else {
-        echo "there is some commits"
+        echo "there are ${commitQuantity} commits for project: ${projectId} branch :${branchName} since ${rpmBuildDate}"
+        return true
     }
-    return false
+}
+
+
+private boolean isBuildProjectUpdate(String projectId, String branchName, String path, Date rpmBuildDate) {
+    String formattedDate = formatDate4Gitlab(rpmBuildDate)
+    def response = httpRequest ignoreSslErrors: true, customHeaders: [[name: "PRIVATE-TOKEN", value: gitLabApiToken]],
+            url: "https://${gitLabHost}/api/v4/projects/${projectId}/repository/commits?since=${formattedDate}" +
+                    "&ref_name=${branchName}&path=${path}"
+    if (response.status != 200) {
+        error("failed to query gitlab for update info")
+    }
+    def jsonResponse = readJSON text: response.content
+    def commitQuantity = jsonResponse.size()
+    if (commitQuantity == 0) {
+        echo "there is no commit for project: ${projectId} branch: ${branchName} since ${rpmBuildDate} in path:${path}"
+        return false
+    } else {
+        echo "there are ${commitQuantity} commits for project: ${projectId} branch :${branchName} " +
+                "since ${rpmBuildDate} in path: ${path}"
+        return true
+    }
+}
+
+/**
+ * 将Date对象格式化为gitlab用的时间字符串
+ * @param rpmBuildDate date对象
+ * @return ISO 8601标准时间字符串
+ */
+private String formatDate4Gitlab(Date rpmBuildDate) {
+    SimpleDateFormat gitlabSdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ")
+    gitlabSdf.setTimeZone(TimeZone.getTimeZone("UTC"))
+    return gitlabSdf.format(rpmBuildDate)
 }

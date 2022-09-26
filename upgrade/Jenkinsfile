@@ -17,10 +17,13 @@ pipeline {
         distroSpace = 'distro'
         distroSourceSpace = 'distroSource'
         distroSourceRpmSpace = "${distroSourceSpace}/rpms"
-        upgradeDir = "ris-huaweiit-upgrade-133"
-        upgradeSrcDir = "${upgradeDir}/packages"
-        degradeSrcDir = "${upgradeDir}/old"
         branchName = "3.3.8-c-huaweiit"
+        upgradeTemplateDir = "ris-huaweiit-upgrade-133"
+        releaseNumber = "133"
+        deployDate = "220930"
+        upgradePackageDir = "${distroSpace}/aca_${branchName}_${releaseNumber}_euler_${deployDate}"
+        upgradeSrcDir = "${upgradePackageDir}/packages"
+        degradeSrcDir = "${upgradePackageDir}/old"
 //        gitLabApiToken = "qWG7Gs_rwbAsq2Vp-g9U"
         gitLabApiToken = credentials("GITLAB_API_TOKEN")
         gitLabHost = "gitlab.shterm.com"
@@ -45,7 +48,7 @@ pipeline {
         stage('Use template of upgrade directory in rpm-repos') {
             steps {
                 script {
-                    def upgradeDirPathInRepos = "../rpm-repos-trigger/distro/upgrade/${upgradeDir}" + ""
+                    def upgradeDirPathInRepos = "../rpm-repos-trigger/distro/upgrade/${upgradeTemplateDir}" + ""
                     def permissionTable = [
                             'upgrade'                    : '700',
                             'check_scripts/pre_check.sh' : '755',
@@ -54,13 +57,13 @@ pipeline {
                     if (!fileExists(upgradeDirPathInRepos)) {
                         error "con not find the path: ${upgradeDirPathInRepos}"
                     }
-                    sh "\\cp -rf ${upgradeDirPathInRepos} ./${distroSpace}/"
-                    if (!fileExists("${distroSpace}/${upgradeDir}")) {
-                        error "failed to copy upgrade directory: ${upgradeDir} to workspace"
+                    sh "\\cp -rf ${upgradeDirPathInRepos} ./${upgradePackageDir}"
+                    if (!fileExists("${upgradePackageDir}")) {
+                        error "failed to copy upgrade directory: ${upgradeTemplateDir} to workspace"
                     }
                     echo "copied template"
                     permissionTable.each { item ->
-                        sh "chmod ${item.value} ${distroSpace}/${upgradeDir}/${item.key}"
+                        sh "chmod ${item.value} ${upgradePackageDir}/${item.key}"
                     }
                 }
             }
@@ -89,8 +92,8 @@ pipeline {
                         release = "133.aca"
                         buildArch = "noarch"
                         jobName = "shterm2-fileclient-3.3.8-c-huaweiit"
-                        distRpmDir = "${distroSpace}/${upgradeSrcDir}/common"
-                        degradeRpmDir = "${distroSpace}/${degradeSrcDir}/common"
+                        distRpmDir = "${upgradeSrcDir}/common"
+                        degradeRpmDir = "${degradeSrcDir}/common"
                         srcProjectId = "250"
                     }
                     steps {
@@ -132,8 +135,8 @@ pipeline {
                         release = "132.aca"
                         buildArch = "noarch"
                         jobName = "shterm2-guiclient-3.3.8-c-huaweiit"
-                        distRpmDir = "${distroSpace}/${upgradeSrcDir}/common"
-                        degradeRpmDir = "${distroSpace}/${degradeSrcDir}/common"
+                        distRpmDir = "${upgradeSrcDir}/common"
+                        degradeRpmDir = "${degradeSrcDir}/common"
                         srcProjectId = "96"
                     }
                     steps {
@@ -175,8 +178,8 @@ pipeline {
                         release = "133.aca"
                         buildArch = "x86_64"
                         jobName = "3proxy-3.3.8-c-huaweiit"
-                        distRpmDir = "${distroSpace}/${upgradeSrcDir}/3proxy"
-                        degradeRpmDir = "${distroSpace}/${degradeSrcDir}/3proxy"
+                        distRpmDir = "${upgradeSrcDir}/3proxy"
+                        degradeRpmDir = "${degradeSrcDir}/3proxy"
                         srcProjectId = "506"
                         srcProjectBranch = "master"
                     }
@@ -213,6 +216,18 @@ pipeline {
         stage('Get lib') {
             steps {
                 echo 'get lib'
+            }
+        }
+        stage('Build tar') {
+            steps {
+                sh "tar cvf ${upgradePackageDir}.tar ${upgradePackageDir}"
+                script {
+                    if (!fileExists("${upgradePackageDir}.tar")) {
+                        error "failed to package ${upgradePackageDir} to ${upgradePackageDir}.tar"
+                    } else {
+                        echo "succeed to package ${upgradePackageDir} to ${upgradePackageDir}.tar"
+                    }
+                }
             }
         }
         stage('Deploy') {
